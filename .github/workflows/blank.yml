@@ -1,0 +1,96 @@
+name: NIFTY CSV Auto Updater
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "15 3 * * 1-5"
+
+permissions:
+  contents: write
+
+jobs:
+  update-nifty-csv:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download NIFTY 50
+        run: |
+          curl -L --retry 3 --connect-timeout 30 --max-time 120 \
+          -A "Mozilla/5.0" \
+          "https://nsearchives.nseindia.com/content/indices/ind_nifty50list.csv" \
+          -o NIFTY_50_LIST.csv
+
+      - name: Download NIFTY 100
+        run: |
+          curl -L --retry 3 --connect-timeout 30 --max-time 120 \
+          -A "Mozilla/5.0" \
+          "https://nsearchives.nseindia.com/content/indices/ind_nifty100list.csv" \
+          -o NIFTY_100_LIST.csv
+
+      - name: Download NIFTY 500
+        run: |
+          curl -L --retry 3 --connect-timeout 30 --max-time 120 \
+          -A "Mozilla/5.0" \
+          "https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv" \
+          -o NIFTY_500_LIST.csv
+
+      - name: Download NIFTY Midcap 100
+        run: |
+          curl -L --retry 3 --connect-timeout 30 --max-time 120 \
+          -A "Mozilla/5.0" \
+          "https://nsearchives.nseindia.com/content/indices/ind_niftymidcap100list.csv" \
+          -o NIFTY_MIDCAP_100_LIST.csv
+
+      - name: Download NIFTY Smallcap 100
+        run: |
+          curl -L --retry 3 --connect-timeout 30 --max-time 120 \
+          -A "Mozilla/5.0" \
+          "https://nsearchives.nseindia.com/content/indices/ind_niftysmallcap100list.csv" \
+          -o NIFTY_SMALLCAP_100_LIST.csv
+
+      - name: Validate files
+        run: |
+          test -s NIFTY_50_LIST.csv
+          test -s NIFTY_100_LIST.csv
+          test -s NIFTY_500_LIST.csv
+          test -s NIFTY_MIDCAP_100_LIST.csv
+          test -s NIFTY_SMALLCAP_100_LIST.csv
+
+          echo "All 5 CSV files downloaded successfully."
+
+      - name: Check row counts
+        run: |
+          echo "NIFTY 50:"
+          wc -l NIFTY_50_LIST.csv
+
+          echo "NIFTY 100:"
+          wc -l NIFTY_100_LIST.csv
+
+          echo "NIFTY 500:"
+          wc -l NIFTY_500_LIST.csv
+
+          echo "MIDCAP 100:"
+          wc -l NIFTY_MIDCAP_100_LIST.csv
+
+          echo "SMALLCAP 100:"
+          wc -l NIFTY_SMALLCAP_100_LIST.csv
+
+      - name: Commit updated CSV files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            NIFTY_50_LIST.csv \
+            NIFTY_100_LIST.csv \
+            NIFTY_500_LIST.csv \
+            NIFTY_MIDCAP_100_LIST.csv \
+            NIFTY_SMALLCAP_100_LIST.csv
+
+          git diff --cached --quiet || git commit -m "Update NIFTY CSV files"
+
+          git push
