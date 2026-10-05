@@ -1,4 +1,4 @@
-name: NIFTY CSV Auto Updater V2
+name: NIFTY CSV Auto Updater V3
 
 on:
   workflow_dispatch:
@@ -13,15 +13,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # --------------------------------------------------
-      # 1. CHECKOUT
-      # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --------------------------------------------------
-      # 2. DOWNLOAD NIFTY 50
-      # --------------------------------------------------
+      # ==================================================
+      # DOWNLOAD NIFTY 50
+      # ==================================================
       - name: Download NIFTY 50
         run: |
           curl -L \
@@ -32,9 +29,9 @@ jobs:
             "https://nsearchives.nseindia.com/content/indices/ind_nifty50list.csv" \
             -o NIFTY_50_LIST.csv
 
-      # --------------------------------------------------
-      # 3. DOWNLOAD NIFTY 100
-      # --------------------------------------------------
+      # ==================================================
+      # DOWNLOAD NIFTY 100
+      # ==================================================
       - name: Download NIFTY 100
         run: |
           curl -L \
@@ -45,9 +42,9 @@ jobs:
             "https://nsearchives.nseindia.com/content/indices/ind_nifty100list.csv" \
             -o NIFTY_100_LIST.csv
 
-      # --------------------------------------------------
-      # 4. DOWNLOAD NIFTY 500
-      # --------------------------------------------------
+      # ==================================================
+      # DOWNLOAD NIFTY 500
+      # ==================================================
       - name: Download NIFTY 500
         run: |
           curl -L \
@@ -58,9 +55,9 @@ jobs:
             "https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv" \
             -o NIFTY_500_LIST.csv
 
-      # --------------------------------------------------
-      # 5. DOWNLOAD NIFTY MIDCAP 100
-      # --------------------------------------------------
+      # ==================================================
+      # DOWNLOAD MIDCAP 100
+      # ==================================================
       - name: Download NIFTY Midcap 100
         run: |
           curl -L \
@@ -71,9 +68,9 @@ jobs:
             "https://nsearchives.nseindia.com/content/indices/ind_niftymidcap100list.csv" \
             -o NIFTY_MIDCAP_100_LIST.csv
 
-      # --------------------------------------------------
-      # 6. DOWNLOAD NIFTY SMALLCAP 100
-      # --------------------------------------------------
+      # ==================================================
+      # DOWNLOAD SMALLCAP 100
+      # ==================================================
       - name: Download NIFTY Smallcap 100
         run: |
           curl -L \
@@ -84,10 +81,10 @@ jobs:
             "https://nsearchives.nseindia.com/content/indices/ind_niftysmallcap100list.csv" \
             -o NIFTY_SMALLCAP_100_LIST.csv
 
-      # --------------------------------------------------
-      # 7. BASIC FILE VALIDATION
-      # --------------------------------------------------
-      - name: Validate downloaded files
+      # ==================================================
+      # BASIC FILE CHECK
+      # ==================================================
+      - name: Validate files exist
         shell: bash
         run: |
           set -e
@@ -101,7 +98,9 @@ jobs:
           )
 
           for file in "${files[@]}"; do
-            echo "Checking $file ..."
+
+            echo "--------------------------------------"
+            echo "Checking: $file"
 
             if [ ! -s "$file" ]; then
               echo "ERROR: $file is empty or missing."
@@ -111,166 +110,188 @@ jobs:
             echo "OK: $file"
           done
 
-          echo "All 5 CSV files exist and are non-empty."
+          echo ""
+          echo "All 5 CSV files downloaded successfully."
 
-      # --------------------------------------------------
-      # 8. EXACT ROW + HEADER + DUPLICATE VALIDATION
-      # --------------------------------------------------
-      - name: Validate NIFTY CSV structure and counts
+      # ==================================================
+      # EXACT SYMBOL VALIDATION
+      # ==================================================
+      - name: Validate CSV structure and stock counts
         shell: bash
         run: |
           set -e
 
           validate_csv() {
+
             FILE="$1"
             EXPECTED="$2"
 
             echo ""
-            echo "======================================"
+            echo "=========================================="
             echo "VALIDATING: $FILE"
             echo "EXPECTED STOCKS: $EXPECTED"
-            echo "======================================"
+            echo "=========================================="
 
-            # ------------------------------------------
-            # Header
-            # ------------------------------------------
-            HEADER=$(head -n 1 "$FILE")
-
-            echo "HEADER:"
-            echo "$HEADER"
-
-            if ! echo "$HEADER" | grep -qi "SYMBOL"; then
-              echo "ERROR: SYMBOL column not found in $FILE"
-              exit 1
-            fi
-
-            # ------------------------------------------
-            # Find SYMBOL column number
-            # ------------------------------------------
-            SYMBOL_COL=$(python3 - "$FILE" <<'PY'
-import csv
-import sys
-
-file = sys.argv[1]
-
-with open(file, newline='', encoding='utf-8-sig') as f:
-    reader = csv.reader(f)
-    header = next(reader)
-
-header_clean = [x.strip().upper() for x in header]
-
-try:
-    print(header_clean.index("SYMBOL") + 1)
-except ValueError:
-    print("0")
-PY
-)
-
-            if [ "$SYMBOL_COL" -eq 0 ]; then
-              echo "ERROR: SYMBOL column not found."
-              exit 1
-            fi
-
-            echo "SYMBOL COLUMN: $SYMBOL_COL"
-
-            # ------------------------------------------
-            # Exact data-row count
-            # ------------------------------------------
-            DATA_ROWS=$(python3 - "$FILE" <<'PY'
-import csv
-import sys
-
-file = sys.argv[1]
-
-with open(file, newline='', encoding='utf-8-sig') as f:
-    reader = csv.reader(f)
-    next(reader)
-    rows = list(reader)
-
-print(len(rows))
-PY
-)
-
-            echo "DATA ROWS: $DATA_ROWS"
-
-            if [ "$DATA_ROWS" -ne "$EXPECTED" ]; then
-              echo ""
-              echo "❌ ERROR: WRONG STOCK COUNT"
-              echo "Expected: $EXPECTED"
-              echo "Found:    $DATA_ROWS"
-              echo ""
-              echo "GitHub commit BLOCKED."
-              exit 1
-            fi
-
-            # ------------------------------------------
-            # Check blank symbols + duplicates
-            # ------------------------------------------
             python3 - "$FILE" "$EXPECTED" <<'PY'
-import csv
-import sys
-from collections import Counter
 
-file = sys.argv[1]
-expected = int(sys.argv[2])
+          import csv
+          import sys
+          from collections import Counter
 
-with open(file, newline='', encoding='utf-8-sig') as f:
-    reader = csv.reader(f)
+          file = sys.argv[1]
+          expected = int(sys.argv[2])
 
-    header = next(reader)
-    header_clean = [x.strip().upper() for x in header]
+          # ------------------------------------------
+          # READ CSV
+          # ------------------------------------------
 
-    try:
-        symbol_col = header_clean.index("SYMBOL")
-    except ValueError:
-        print("ERROR: SYMBOL column missing.")
-        sys.exit(1)
+          with open(
+              file,
+              newline="",
+              encoding="utf-8-sig"
+          ) as f:
 
-    symbols = []
+              reader = csv.reader(f)
 
-    for row_no, row in enumerate(reader, start=2):
-        if len(row) <= symbol_col:
-            print(f"ERROR: Row {row_no} has no SYMBOL column value.")
-            sys.exit(1)
+              rows = list(reader)
 
-        symbol = row[symbol_col].strip().upper()
+          if not rows:
+              print("ERROR: CSV is empty.")
+              sys.exit(1)
 
-        if not symbol:
-            print(f"ERROR: Blank SYMBOL at row {row_no}.")
-            sys.exit(1)
+          # ------------------------------------------
+          # HEADER
+          # ------------------------------------------
 
-        symbols.append(symbol)
+          header = [
+              str(x).strip().upper()
+              for x in rows[0]
+          ]
 
-counter = Counter(symbols)
+          print("HEADER:")
+          print(" | ".join(header))
 
-duplicates = sorted(
-    symbol for symbol, count in counter.items()
-    if count > 1
-)
+          if "SYMBOL" not in header:
+              print("")
+              print("ERROR: SYMBOL column not found.")
+              sys.exit(1)
 
-if duplicates:
-    print("❌ DUPLICATE SYMBOLS FOUND:")
-    for symbol in duplicates:
-        print(symbol)
-    sys.exit(1)
+          symbol_col = header.index("SYMBOL")
 
-if len(symbols) != expected:
-    print(f"ERROR: Expected {expected}, found {len(symbols)}")
-    sys.exit(1)
+          # ------------------------------------------
+          # DATA
+          # ------------------------------------------
 
-if len(set(symbols)) != expected:
-    print("ERROR: Unique SYMBOL count mismatch.")
-    sys.exit(1)
+          data_rows = rows[1:]
 
-print(f"✅ STOCK COUNT: {len(symbols)}")
-print(f"✅ UNIQUE SYMBOLS: {len(set(symbols))}")
-print("✅ DUPLICATES: 0")
-print("✅ SYMBOL VALIDATION PASSED")
-PY
+          print("")
+          print("DATA ROWS:", len(data_rows))
 
-            echo ""
-            echo "✅ $FILE VALIDATION PASSED"
+          # ------------------------------------------
+          # EXACT COUNT
+          # ------------------------------------------
+
+          if len(data_rows) != expected:
+
+              print("")
+              print("❌ WRONG STOCK COUNT")
+              print("EXPECTED:", expected)
+              print("FOUND:", len(data_rows))
+              print("")
+              print("CSV COMMIT BLOCKED.")
+
+              sys.exit(1)
+
+          # ------------------------------------------
+          # SYMBOLS
+          # ------------------------------------------
+
+          symbols = []
+
+          for row_number, row in enumerate(
+              data_rows,
+              start=2
+          ):
+
+              if len(row) <= symbol_col:
+
+                  print(
+                      f"ERROR: Row {row_number} "
+                      "has no SYMBOL column."
+                  )
+
+                  sys.exit(1)
+
+              symbol = (
+                  str(row[symbol_col])
+                  .strip()
+                  .upper()
+              )
+
+              if not symbol:
+
+                  print(
+                      f"ERROR: Blank SYMBOL "
+                      f"at row {row_number}."
+                  )
+
+                  sys.exit(1)
+
+              symbols.append(symbol)
+
+          # ------------------------------------------
+          # DUPLICATES
+          # ------------------------------------------
+
+          counts = Counter(symbols)
+
+          duplicates = sorted(
+              symbol
+              for symbol, count in counts.items()
+              if count > 1
+          )
+
+          if duplicates:
+
+              print("")
+              print("❌ DUPLICATE SYMBOLS FOUND:")
+
+              for symbol in duplicates:
+                  print(symbol)
+
+              print("")
+              print("CSV COMMIT BLOCKED.")
+
+              sys.exit(1)
+
+          # ------------------------------------------
+          # UNIQUE COUNT
+          # ------------------------------------------
+
+          unique_count = len(set(symbols))
+
+          print("STOCK COUNT:", len(symbols))
+          print("UNIQUE SYMBOLS:", unique_count)
+          print("DUPLICATES:", len(duplicates))
+
+          if unique_count != expected:
+
+              print("")
+              print("❌ UNIQUE SYMBOL COUNT ERROR")
+              print("EXPECTED:", expected)
+              print("FOUND:", unique_count)
+
+              sys.exit(1)
+
+          print("")
+          print("✅ SYMBOL VALIDATION PASSED")
+
+          PY
           }
+
+          # ------------------------------------------
+          # EXPECTED COUNTS
+          # ------------------------------------------
 
           validate_csv "NIFTY_50_LIST.csv" 50
           validate_csv "NIFTY_100_LIST.csv" 100
@@ -279,49 +300,62 @@ PY
           validate_csv "NIFTY_SMALLCAP_100_LIST.csv" 100
 
           echo ""
-          echo "======================================"
-          echo "🎯 ALL NIFTY CSV VALIDATIONS PASSED"
-          echo "======================================"
+          echo "=========================================="
+          echo "✅ ALL CSV VALIDATIONS PASSED"
+          echo "=========================================="
 
-      # --------------------------------------------------
-      # 9. SHOW FINAL COUNTS
-      # --------------------------------------------------
+      # ==================================================
+      # FINAL REPORT
+      # ==================================================
       - name: Final row count report
         shell: bash
         run: |
-          echo "======================================"
+          echo ""
+          echo "=========================================="
           echo "FINAL NIFTY CSV COUNTS"
-          echo "======================================"
+          echo "=========================================="
 
           python3 <<'PY'
-import csv
-import os
 
-files = [
-    "NIFTY_50_LIST.csv",
-    "NIFTY_100_LIST.csv",
-    "NIFTY_500_LIST.csv",
-    "NIFTY_MIDCAP_100_LIST.csv",
-    "NIFTY_SMALLCAP_100_LIST.csv"
-]
+          import csv
 
-for file in files:
-    with open(file, newline='', encoding='utf-8-sig') as f:
-        rows = list(csv.reader(f))
+          files = [
+              "NIFTY_50_LIST.csv",
+              "NIFTY_100_LIST.csv",
+              "NIFTY_500_LIST.csv",
+              "NIFTY_MIDCAP_100_LIST.csv",
+              "NIFTY_SMALLCAP_100_LIST.csv"
+          ]
 
-    print(f"{file}: {len(rows) - 1} stocks")
-PY
+          for file in files:
 
-      # --------------------------------------------------
-      # 10. COMMIT ONLY IF EVERYTHING PASSED
-      # --------------------------------------------------
+              with open(
+                  file,
+                  newline="",
+                  encoding="utf-8-sig"
+              ) as f:
+
+                  rows = list(csv.reader(f))
+
+              print(
+                  f"{file}: "
+                  f"{len(rows) - 1} stocks"
+              )
+
+          PY
+
+      # ==================================================
+      # COMMIT
+      # ==================================================
       - name: Commit updated CSV files
         shell: bash
         run: |
           set -e
 
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add \
             NIFTY_50_LIST.csv \
@@ -331,10 +365,18 @@ PY
             NIFTY_SMALLCAP_100_LIST.csv
 
           if git diff --cached --quiet; then
+
             echo "No CSV changes detected."
             echo "Nothing to commit."
+
           else
-            git commit -m "Update NIFTY CSV files"
+
+            git commit \
+              -m "Update NIFTY CSV files"
+
             git push
-            echo "✅ CSV files committed and pushed successfully."
+
+            echo ""
+            echo "✅ CSV files committed successfully."
+
           fi
